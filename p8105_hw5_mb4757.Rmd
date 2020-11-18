@@ -3,7 +3,7 @@ title: "HW 5"
 output: github_document
 ---
 
-```{r setup}
+```{r setup, message=FALSE}
 library(tidyverse)
 library(rvest)
 library(lattice)
@@ -24,10 +24,13 @@ scale_colour_discrete = scale_colour_viridis_d
 scale_fill_discrete = scale_fill_viridis_d
 
 ```
+
+
+
 ## Problem 1
 
 Read in the data.
-```{r}
+```{r, message=FALSE}
 homicide_df = 
   read_csv("homicide-data/homicide-data.csv") %>% 
   mutate(
@@ -43,7 +46,7 @@ homicide_df =
 ```
 
 Let's look at this a bit.
-```{r}
+```{r, message=FALSE}
 aggregate_df =
 homicide_df %>% 
   group_by(city_state) %>% 
@@ -54,7 +57,7 @@ homicide_df %>%
 ```
 
 Can I do a prop test for a single city?
-```{r}
+```{r, message=FALSE}
 prop.test(
   aggregate_df %>% filter(city_state == "Baltimore_MD") %>% pull(hom_unsolved),
   aggregate_df %>% filter(city_state == "Baltimore_MD") %>% pull(hom_total)) %>% 
@@ -62,7 +65,7 @@ prop.test(
 ```
 
 Try to iterate...
-```{r}
+```{r, message=FALSE}
 results_df =
 aggregate_df %>% 
   mutate(
@@ -76,7 +79,7 @@ aggregate_df %>%
 ```
 
 
-```{r}
+```{r, message=FALSE}
 results_df %>% 
   mutate(city_state = fct_reorder(city_state,estimate)) %>% 
   ggplot(aes(x = city_state, y = estimate)) +
@@ -109,22 +112,24 @@ homicide_df =
   nest(data = resolved)
 ```
 
+
+
 ## Problem 2
 
 take a look at 1 csv file
-```{r}
+```{r, message=FALSE}
 data_1 = read_csv("lda_data/con_01.csv")
 ```
 
 make the tibble and tody the results
-```{r}
+```{r, message=FALSE}
 path_df =
 tibble(
 path = list.files("lda_data")
 ) %>% 
   mutate(
     path = str_c("lda_data/", path),
-    data = map(.x = path, ~ read_csv(.x))) %>% 
+    data = purrr::map(.x = path, ~ read_csv(.x))) %>% 
     unnest(data) %>% 
   separate(path, into = c("path", "other"), sep= "/") %>% 
   separate(other, into = c("arm", "rest"), sep= "_") %>% 
@@ -135,22 +140,71 @@ path = list.files("lda_data")
 ```
 
 make the spaghetti plot
-```{r}
+```{r, message=FALSE}
 results_df =
 path_df %>% 
   pivot_longer(
     week_1:week_8,
     names_to = "time",
     values_to = "values"
-  ) %>% 
-  mutate(
-    ID = as.numeric(ID)
   )
 
 ggplot(results_df, aes(x=time, y=values, group = ID, color=factor(ID))) +
-  geom_path() + 
-  geom_point() +
+  geom_path(alpha = 0.7) + 
+  geom_point(alpha = 0.7) +
   theme_bw()
 ```
 
 
+
+## Problem 3
+
+$$X_i \stackrel{i.i.d.}{\sim} Norm(0,5)$$
+
+made a hypothesis function
+```{r, message=FALSE}
+hypothesis= function(sample_size = 30, mu, sigma = 5) { 
+  sim_data = 
+  tibble(
+    x = rnorm(n = sample_size, mean = mu, sd = sigma)
+  )
+  
+    t.test(sim_data, 
+           alternative = "two.sided",
+           mu = 0, paired = FALSE, 
+           var.equal = FALSE, 
+           conf.level = 0.95) %>% 
+            broom::tidy() %>% 
+      select(estimate, p.value)
+
+}
+```
+
+case validation
+```{r}
+hypothesis(30, 0, 5)
+```
+
+Create 5000 datasets for hypothesis test mu = 0 iteration 
+```{r}
+output = vector("list", length = 50)
+
+for (i in 1:50){
+  output[[i]] = hypothesis(mu = 0)
+} 
+
+bind_rows(output)
+```
+
+Create 5000 datasets for hypothesis test mu = 0:6 iteration 
+```{r}
+sim_results =
+  tibble(mu = c(0, 1, 2, 3, 4, 5, 6)) %>% 
+  mutate(
+    output_lists = map(.x = mu, ~rerun (50, hypothesis(mu = .x))),
+    estimate_df = map(output_lists, bind_rows)
+    ) %>% 
+  select(mu, estimate_df) %>% 
+  unnest(estimate_df) %>% 
+  rename(mu_hat = estimate)
+```
