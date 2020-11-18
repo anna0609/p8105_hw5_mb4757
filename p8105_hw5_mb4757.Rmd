@@ -6,7 +6,7 @@ output: github_document
 ```{r setup}
 library(tidyverse)
 library(rvest)
-library(rnoaa)
+library(lattice)
 
 knitr::opts_chunk$set(
   fig.width = 6,
@@ -110,11 +110,13 @@ homicide_df =
 ```
 
 ## Problem 2
-```{r}
 
+take a look at 1 csv file
+```{r}
 data_1 = read_csv("lda_data/con_01.csv")
 ```
 
+make the tibble and tody the results
 ```{r}
 path_df =
 tibble(
@@ -123,7 +125,32 @@ path = list.files("lda_data")
   mutate(
     path = str_c("lda_data/", path),
     data = map(.x = path, ~ read_csv(.x))) %>% 
-  unnest(data)
-
+    unnest(data) %>% 
+  separate(path, into = c("path", "other"), sep= "/") %>% 
+  separate(other, into = c("arm", "rest"), sep= "_") %>% 
+  separate(rest, into = c("ID", "remain"), sep= 2) %>% 
+  select(-path, -remain) %>% 
+  filter(arm == "con")
+  
 ```
+
+make the spaghetti plot
+```{r}
+results_df =
+path_df %>% 
+  pivot_longer(
+    week_1:week_8,
+    names_to = "time",
+    values_to = "values"
+  ) %>% 
+  mutate(
+    ID = as.numeric(ID)
+  )
+
+ggplot(results_df, aes(x=time, y=values, group = ID, color=factor(ID))) +
+  geom_path() + 
+  geom_point() +
+  theme_bw()
+```
+
 
