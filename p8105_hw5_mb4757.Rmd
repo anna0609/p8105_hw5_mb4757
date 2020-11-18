@@ -23,6 +23,7 @@ options(
 scale_colour_discrete = scale_colour_viridis_d
 scale_fill_discrete = scale_fill_viridis_d
 
+
 ```
 
 
@@ -161,7 +162,7 @@ ggplot(results_df, aes(x=time, y=values, group = ID, color=factor(ID))) +
 
 $$X_i \stackrel{i.i.d.}{\sim} Norm(0,5)$$
 
-made a hypothesis function
+write a hypothesis function
 ```{r, message=FALSE}
 hypothesis= function(sample_size = 30, mu, sigma = 5) { 
   sim_data = 
@@ -180,31 +181,97 @@ hypothesis= function(sample_size = 30, mu, sigma = 5) {
 }
 ```
 
-case validation
+function validation
 ```{r}
 hypothesis(30, 0, 5)
 ```
 
 Create 5000 datasets for hypothesis test mu = 0 iteration 
 ```{r}
-output = vector("list", length = 50)
+output = vector("list", length = 5000)
 
-for (i in 1:50){
+for (i in 1:5000){
   output[[i]] = hypothesis(mu = 0)
 } 
 
 bind_rows(output)
 ```
 
-Create 5000 datasets for hypothesis test mu = 0:6 iteration 
+Create 5000 datasets for hypothesis t.test(mu = 0) with true mu = 0:6 iteration 
 ```{r}
 sim_results =
   tibble(mu = c(0, 1, 2, 3, 4, 5, 6)) %>% 
   mutate(
-    output_lists = map(.x = mu, ~rerun (50, hypothesis(mu = .x))),
+    output_lists = map(.x = mu, ~rerun (5000, hypothesis(mu = .x))),
     estimate_df = map(output_lists, bind_rows)
     ) %>% 
   select(mu, estimate_df) %>% 
   unnest(estimate_df) %>% 
   rename(mu_hat = estimate)
 ```
+
+make plots!
+```{r}
+plot1_df = 
+sim_results %>% 
+  mutate(
+    decision_rule = case_when(
+      p.value < 0.05  ~ "reject_null",
+      p.value >= 0.05 ~ "fail_to_reject",
+    )
+  ) %>% 
+  group_by(mu) %>% 
+    count(decision_rule) %>% 
+  filter(decision_rule == "reject_null") %>% 
+  mutate(
+    proportion = n/5000
+  )
+
+plot1_df %>% 
+ggplot(aes(x=mu, y=proportion, group = 1, color = factor(mu))) +
+  geom_path() + 
+  geom_point() +
+  labs(x = "true mean(mu)", 
+       y = "proportion of reject_null", 
+       title = "the power of the test vs true mean")
+```
+
+Overlay plots!!
+```{r}
+plot2_df = 
+sim_results %>% 
+  mutate(
+    decision_rule = case_when(
+      p.value < 0.05  ~ "reject_null",
+      p.value >= 0.05 ~ "fail_to_reject"
+    )) %>% 
+  group_by(mu) %>% 
+  summarize(
+    mean_mu_hat = mean(mu_hat)
+  )
+
+plot3_df = 
+sim_results %>% 
+  mutate(
+    decision_rule = case_when(
+      p.value < 0.05  ~ "reject_null",
+      p.value >= 0.05 ~ "fail_to_reject"
+    )) %>% 
+  filter(decision_rule == "reject_null") %>% 
+  group_by(mu) %>% 
+  summarize(
+    mean_mu_hat = mean(mu_hat)
+  )
+
+ggplot(plot2_df, aes(x = mu, y = mean_mu_hat)) +
+  geom_path(color = "red") + 
+  geom_point(color = "red") +
+  geom_path(plot3_df, mapping = aes(x = mu, y = mean_mu_hat)) + 
+  geom_point(plot3_df, mapping = aes(x = mu, y = mean_mu_hat)) +
+  labs(x = "true mean(mu)", 
+       y = "average estimate of mu_hat ", 
+       title = "average estimate of mu_hat vs true mean")          
+```
+
+
+
