@@ -7,6 +7,8 @@ output: github_document
 library(tidyverse)
 library(rvest)
 library(lattice)
+library("animation")
+library("magrittr")
 
 knitr::opts_chunk$set(
   fig.width = 6,
@@ -25,8 +27,6 @@ scale_fill_discrete = scale_fill_viridis_d
 
 
 ```
-
-
 
 ## Problem 1
 
@@ -122,9 +122,9 @@ take a look at 1 csv file
 data_1 = read_csv("lda_data/con_01.csv")
 ```
 
-make the tibble and tody the results
+make the tibble and tidy the results
 ```{r, message=FALSE}
-path_df =
+tidy_df =
 tibble(
 path = list.files("lda_data")
 ) %>% 
@@ -134,33 +134,44 @@ path = list.files("lda_data")
     unnest(data) %>% 
   separate(path, into = c("path", "other"), sep= "/") %>% 
   separate(other, into = c("arm", "rest"), sep= "_") %>% 
-  separate(rest, into = c("ID", "remain"), sep= 2) %>% 
+  separate(rest, into = c("subject_ID", "remain"), sep= 2) %>% 
   select(-path, -remain) %>% 
-  filter(arm == "con")
+    pivot_longer(
+    week_1:week_8,
+    names_to = "time",
+    values_to = "observations"
+    ) %>% 
+  mutate(
+    arm = str_replace(arm, "con", "control"),
+    arm = str_replace(arm, "exp", "experimental")
+  ) %>% 
+  separate(time, into = c("name", "week"), sep= "_") %>% 
+  select(-name)
   
+
+control_arm_df = 
+tidy_df %>% 
+  filter(arm == "control") %>% 
+  rename(control_arm = arm)
 ```
 
 make the spaghetti plot
 ```{r, message=FALSE}
-results_df =
-path_df %>% 
-  pivot_longer(
-    week_1:week_8,
-    names_to = "time",
-    values_to = "values"
-  )
 
-ggplot(results_df, aes(x=time, y=values, group = ID, color=factor(ID))) +
+tidy_df %>% 
+  group_by(arm) %>% 
+ggplot(aes(x=week, y=observations, group = subject_ID, color=factor(subject_ID))) +
   geom_path(alpha = 0.7) + 
   geom_point(alpha = 0.7) +
-  theme_bw()
+  facet_grid(.~arm)
+
+# + scale_color_hue(name = "subject_ID") ## only for discrete data
 ```
 
+In these two time-series plots, both control and experimental groups' observations are oscillating. The trend of control group's observations are flat over time. However, as the time increases, the experimental group's observations are increasing.
 
 
 ## Problem 3
-
-$$X_i \stackrel{i.i.d.}{\sim} Norm(0,5)$$
 
 write a hypothesis function
 ```{r, message=FALSE}
@@ -270,8 +281,36 @@ ggplot(plot2_df, aes(x = mu, y = mean_mu_hat)) +
   geom_point(plot3_df, mapping = aes(x = mu, y = mean_mu_hat)) +
   labs(x = "true mean(mu)", 
        y = "average estimate of mu_hat ", 
-       title = "average estimate of mu_hat vs true mean")          
+       title = "average estimate of mu_hat vs true mean")   
+
+
+#The red line is the average estimate of mu_hat vs the true value of true mean.
+
+#The black line is the average estimate of mu_hat only in samples for which the null was rejected vs the true mean.
 ```
+
+When true mean mu is from 0 to 3, the sample average of mu_hat across tests for which the null is rejected not approximately equal to the true value of mu. True mean(mu) and mean_mu_hat are different from each other because power is small. This means Type II error is big since power = 1-beta(Type II error).
+
+When true mean mu is from 4 to 6, the sample average of mu_hat across tests for which the null is rejected approximately equal to the true value of mu. 
+
+As the true mean mu increase, the proportion of times the null was rejected is higher and true mean(mu) almost equal to mean_mu_hat. This happens because power is large, which means type II error is small. 
+
+We can see how does the power changes as the true mean(mu) increase from the following table.
+```{r}
+power_table =
+plot1_df %>% 
+  rename(power = proportion)
+knitr::kable(power_table, title = "power table for mu from 0 to 6")
+
+#notes:
+#Power = 1 – beta(type II error). Significance level = 1 - alpha(Type I error). In reality, we want both Type I and Type II errors to be small. In terms of significance level and power, which means we want a larger significance level and a large power. 
+
+#Type 2 error (failing to reject a false null hypothesis) can be minimized either by picking a larger sample size or by choosing a "threshold" alternative value of the parameter in question that is further from the null value.
+```
+
+
+
+
 
 
 
